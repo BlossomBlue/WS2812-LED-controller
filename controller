@@ -1,0 +1,106 @@
+#include <Adafruit_NeoPixel.h>
+
+#define PIN         6       // LED 灯带的数据线连接的引脚
+#define NUM_LEDS    50      // LED 灯带上的 LED 数量
+#define BRIGHTNESS  50      // 默认亮度
+#define SECTION_NUM 5       // section 的数量
+#define LEDS_PER_SECTION (NUM_LEDS / SECTION_NUM)  // 每个 section 的 LED 数量
+
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(NUM_LEDS, PIN, NEO_GRB + NEO_KHZ800);
+
+enum State {
+    BREATHING,
+    BLINKING,
+    USER_CONTROL
+};
+
+State currentState = BREATHING;
+unsigned long lastChange = 0;
+unsigned long previousMillis = 0;
+int breathingBrightness = 0;
+int breathingDirection = 1;
+
+void setup() {
+    strip.begin();
+    strip.setBrightness(BRIGHTNESS);
+    strip.show();
+    Serial.begin(9600);
+}
+
+void loop() {
+    unsigned long currentMillis = millis();
+    
+    // 每 10 秒更换状态
+    if (currentMillis - lastChange >= 15000) {
+        currentState = static_cast<State>(random(0, 3));
+        lastChange = currentMillis;
+    }
+
+    switch (currentState) {
+        case BREATHING:
+            breathingEffect(currentMillis);
+            break;
+        case BLINKING:
+            blinkingEffect(currentMillis);
+            break;
+        case USER_CONTROL:
+            userControlEffect();
+            break;
+    }
+}
+
+void breathingEffect(unsigned long currentMillis) {
+    if (currentMillis - previousMillis >= 10) { // 控制呼吸速度
+        previousMillis = currentMillis;
+        breathingBrightness += breathingDirection;
+        if (breathingBrightness <= 0 || breathingBrightness >= 255) {
+            breathingDirection *= -1;
+        }
+        for (int i = 0; i < NUM_LEDS; i++) {
+            strip.setPixelColor(i, strip.Color(breathingBrightness, breathingBrightness, breathingBrightness));
+        }
+        strip.show();
+    }
+}
+
+void blinkingEffect(unsigned long currentMillis) {
+    static unsigned long blinkingTimer = 0;
+    static int blinkingBrightness = 0;
+    static bool increasing = true;
+
+    if (currentMillis - blinkingTimer >= 15) { // 控制闪烁速度
+        blinkingTimer = currentMillis;
+
+        // 更新闪烁亮度
+        if (increasing) {
+            blinkingBrightness += 10; // 每次增加亮度值，这里的5可以调整以改变速度
+            if (blinkingBrightness >= 255) {
+                blinkingBrightness = 255;
+                increasing = false;
+            }
+        } else {
+            blinkingBrightness -= 5; // 每次减少亮度值
+            if (blinkingBrightness <= 0) {
+                blinkingBrightness = 0;
+                increasing = true;
+            }
+        }
+
+        // 设置 LED 亮度
+        for (int i = 0; i < NUM_LEDS; i++) {
+            strip.setPixelColor(i, strip.Color(blinkingBrightness, blinkingBrightness, blinkingBrightness));
+        }
+        strip.show();
+    }
+}
+
+
+void userControlEffect() {
+    if (Serial.available() > 0) {
+        int value = Serial.parseInt();
+        if (value >= 0 && value <= 255) {
+            strip.setBrightness(value);
+            strip.show();
+        }
+    }
+}
